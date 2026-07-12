@@ -1,0 +1,1059 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Aplikasi Polaroid V2</title>
+<!-- ======================================================= -->
+<!-- SCRIPT DEPENDENSI & IMPORT MAP -->
+<!-- ======================================================= -->
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+<!-- Mengimpor Font Tulisan Tangan dari Google Fonts -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Caveat:wght@600;700&family=Indie+Flower&family=Kalam:wght@400;700&family=Permanent+Marker&display=swap" rel="stylesheet">
+
+<script type="importmap">
+  {
+    "imports": {
+      "react": "https://esm.sh/react@18.2.0",
+      "react-dom/client": "https://esm.sh/react-dom@18.2.0/client",
+      "lucide-react": "https://esm.sh/lucide-react@0.292.0"
+    }
+  }
+</script>
+
+<!-- ======================================================= -->
+<!-- CSS & JURUS PAMUNGKAS 1 (MEMAKSA FULL SCREEN)           -->
+<!-- ======================================================= -->
+<style>
+  /* Menyembunyikan elemen bawaan Blogger sebisa mungkin (Aman dibiarkan untuk GitHub Pages) */
+  #navbar-iframe, .bg-photo-overlay, .Header, .PageList, .Profile, .BlogArchive, .ReportAbuse,
+  #header-wrapper, #sidebar-wrapper, #footer-wrapper, .sidebar, .footer, .widget-area { 
+      display: none !important; 
+  }
+
+  /* JURUS JITU: Paksa aplikasi kita overlay (menimpa) seluruh layar HP/PC */
+  body, html { margin: 0 !important; padding: 0 !important; overflow: hidden !important; width: 100%; height: 100%; }
+  
+  #root {
+      position: fixed !important;
+      top: 0 !important;
+      left: 0 !important;
+      right: 0 !important;
+      bottom: 0 !important;
+      width: 100vw !important;
+      height: 100vh !important;
+      z-index: 2147483647 !important; /* Menimpa semua cover blogger */
+      background: #f8fafc !important;
+      overflow-y: auto !important;
+      overflow-x: hidden !important;
+      margin: 0 !important;
+      padding: 0 !important;
+      display: block !important;
+  }
+
+  /* ======================================================= */
+  /* CSS KHUSUS UNTUK CETAK (PRINT LANGSUNG)                 */
+  /* ======================================================= */
+  @media print {
+    @page { margin: 0; } /* Margin direset, ukuran (size) akan di-inject otomatis via React */
+    
+    /* JURUS DEWA PRINT: Sembunyikan SEMUA elemen Blogger KECUALI aplikasi kita */
+    body > *:not(#root) { display: none !important; }
+    
+    body, html { margin: 0 !important; padding: 0 !important; background: #fff !important; width: 100% !important; height: auto !important; overflow: visible !important; }
+    
+    /* Matikan fixed position saat nge-print agar halaman 2 dst tidak tertimpa/hilang */
+    #root { position: static !important; width: 100% !important; height: auto !important; overflow: visible !important; z-index: auto !important; background: #fff !important; display: block !important; }
+    
+    /* Sembunyikan semua tombol dan panel samping */
+    .no-print { display: none !important; }
+    
+    /* Reset container area gambar */
+    .print-container { padding: 0 !important; margin: 0 !important; display: block !important; width: 100% !important; background: #fff !important; overflow: visible !important; }
+    
+    /* Format setiap halaman agar pas 1 lembar utuh dan tidak terpotong */
+    .print-page { 
+      margin: 0 auto !important; 
+      box-shadow: none !important; 
+      border: none !important; 
+      page-break-after: always !important; 
+      page-break-inside: avoid !important; 
+      background: #fff !important;
+      display: flex !important;
+      align-items: center !important;
+      justify-content: center !important;
+      /* Lebar/Tinggi khusus print disuntikkan via React agar presisi */
+    }
+    
+    /* Memaksa browser mencetak warna background/gambar dengan kualitas HD */
+    * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; color-adjust: exact !important; }
+  }
+
+  /* Sembunyikan panah naik-turun bawaan browser pada input angka agar ruang teks lebih lega */
+  input[type="number"]::-webkit-inner-spin-button,
+  input[type="number"]::-webkit-outer-spin-button {
+      -webkit-appearance: none;
+      margin: 0;
+  }
+  input[type="number"] {
+      -moz-appearance: textfield;
+  }
+
+  /* FONT POLAROID KUSTOM */
+  .font-caveat { font-family: 'Caveat', cursive; }
+  .font-indie { font-family: 'Indie Flower', cursive; }
+  .font-kalam { font-family: 'Kalam', cursive; }
+  .font-marker { font-family: 'Permanent Marker', cursive; }
+</style>
+</head>
+<body>
+
+<!-- ======================================================= -->
+<!-- WADAH APLIKASI -->
+<!-- ======================================================= -->
+<div id="root"></div>
+
+<!-- ======================================================= -->
+<!-- LOGIKA APLIKASI REACT -->
+<!-- ======================================================= -->
+<script type="text/babel" data-type="module">
+  import React, { useState, useRef, useMemo, useEffect } from 'react';
+  import { createRoot } from 'react-dom/client';
+  import { 
+    Upload, Trash2, Image as ImageIcon, FileText, Type,
+    ChevronUp, ChevronDown, ChevronLeft, ChevronRight, X, Download, 
+    Loader2, Sparkles, Scaling, RotateCw, Printer, Check, Palette,
+    ZoomIn, ZoomOut
+  } from 'lucide-react';
+
+  const PAPER_SIZES = {
+    r2: { id: 'r2', name: '2R', width: 60, height: 90 },
+    r3: { id: 'r3', name: '3R', width: 89, height: 127 },
+    r4: { id: 'r4', name: '4R', width: 102, height: 152 },
+    r5: { id: 'r5', name: '5R', width: 127, height: 178 },
+    r6: { id: 'r6', name: '6R', width: 152, height: 203 },
+    r8: { id: 'r8', name: '8R', width: 203, height: 254 },
+    a5: { id: 'a5', name: 'A5', width: 148, height: 210 },
+    a4: { id: 'a4', name: 'A4', width: 210, height: 297 },
+    f4: { id: 'f4', name: 'F4', width: 215, height: 330 },
+    a3: { id: 'a3', name: 'A3', width: 297, height: 420 },
+    a3plus: { id: 'a3plus', name: 'A3+', width: 329, height: 483 },
+    custom: { id: 'custom', name: 'Custom', width: 210, height: 297 },
+  };
+
+  const MOVE_STEP = 5;
+  const ZOOM_STEP = 5;
+
+  const NumberStepper = ({ value, onChange, min = -999, max = 999 }) => {
+    const handleInputChange = (e) => {
+      const val = e.target.value;
+      if (val === '' || val === '-') {
+        onChange(val); 
+      } else {
+        const parsed = parseInt(val, 10);
+        if (!isNaN(parsed)) {
+          onChange(Math.min(max, parsed)); 
+        }
+      }
+    };
+
+    const handleBlur = () => {
+      let finalVal = Number(value);
+      if (isNaN(finalVal) || value === '') finalVal = min > 0 ? min : 0;
+      onChange(Math.max(min, Math.min(max, finalVal)));
+    };
+
+    return (
+      <div className="flex items-center w-full bg-slate-50 border-2 border-slate-200 rounded-xl shadow-[inset_0_2px_4px_rgba(0,0,0,0.05),0_1px_0_white] overflow-hidden focus-within:border-cyan-400 p-0.5 gap-0.5 transition-all">
+        <button onClick={() => onChange(Math.max(min, (Number(value) || 0) - 1))} className="p-1 sm:p-1.5 flex-shrink-0 text-slate-500 hover:text-cyan-600 font-black bg-white rounded-lg shadow-[0_2px_0_0_#cbd5e1] active:shadow-[0_0px_0_0_#cbd5e1] active:translate-y-[2px] transition-all"><ChevronDown className="w-3 h-3 sm:w-4 sm:h-4" /></button>
+        <input type="text" value={value} onChange={handleInputChange} onBlur={handleBlur} className="flex-1 w-full min-w-0 text-center font-bold text-slate-700 outline-none bg-transparent py-1 px-0 text-sm sm:text-base" />
+        <button onClick={() => onChange(Math.min(max, (Number(value) || 0) + 1))} className="p-1 sm:p-1.5 flex-shrink-0 text-slate-500 hover:text-cyan-600 font-black bg-white rounded-lg shadow-[0_2px_0_0_#cbd5e1] active:shadow-[0_0px_0_0_#cbd5e1] active:translate-y-[2px] transition-all"><ChevronUp className="w-3 h-3 sm:w-4 sm:h-4" /></button>
+      </div>
+    );
+  };
+
+  function App() {
+    const [photos, setPhotos] = useState([]);
+    const [paper, setPaper] = useState(PAPER_SIZES.a4);
+    
+    const [photoWidth, setPhotoWidth] = useState(54); 
+    const [photoHeight, setPhotoHeight] = useState(86);
+
+    const [bottomPadding, setBottomPadding] = useState(24);
+    const [textSize, setTextSize] = useState(18); 
+    const [textOffset, setTextOffset] = useState(0); 
+    const [defaultText1, setDefaultText1] = useState('');
+    const [defaultText2, setDefaultText2] = useState('');
+    const [selectedFont, setSelectedFont] = useState('font-caveat');
+
+    const [textOpacity, setTextOpacity] = useState(100); 
+    const [textSpacing, setTextSpacing] = useState(15);  
+    
+    // Warna Global
+    const [frameColor, setFrameColor] = useState('#ffffff');
+    const [textColor, setTextColor] = useState('#1e293b');
+
+    const [editingPhoto, setEditingPhoto] = useState(null);
+    const [pageWidthPx, setPageWidthPx] = useState(800); 
+
+    const fileInputRef = useRef(null);
+
+    const [showModal, setShowModal] = useState(false);
+    const [exportName, setExportName] = useState('paksehPOLAROID');
+    const [exportFormat, setExportFormat] = useState('pdf');
+    const [exportQuality, setExportQuality] = useState(100); 
+    const [isExporting, setIsExporting] = useState(false);
+    const [showConfirmModal, setShowConfirmModal] = useState(false);
+
+    const layoutInfo = useMemo(() => {
+      const w = Number(photoWidth) || 1;
+      const h = Number(photoHeight) || 1;
+      
+      const cols = Math.floor(paper.width / w);
+      const rows = Math.floor(paper.height / h);
+      
+      let validCols = cols > 0 ? cols : 1;
+      let validRows = rows > 0 ? rows : 1;
+      
+      const photosPerPage = validCols * validRows;
+      const totalPhotosWidth = validCols * w;
+      const totalPhotosHeight = validRows * h;
+      
+      // Menghitung persentase lebar dan tinggi grid terhadap kertas
+      const gridWidthPercent = Math.min(100, (totalPhotosWidth / paper.width) * 100);
+      const gridHeightPercent = Math.min(100, (totalPhotosHeight / paper.height) * 100);
+
+      return { 
+        cols: validCols, 
+        rows: validRows, 
+        photosPerPage,
+        gridWidthPercent,
+        gridHeightPercent
+      };
+    }, [paper, photoWidth, photoHeight]);
+
+    const pages = useMemo(() => {
+      const pageArray = [];
+      const perPage = layoutInfo.photosPerPage;
+      for (let i = 0; i < photos.length; i += perPage) {
+        pageArray.push(photos.slice(i, i + perPage));
+      }
+      if (pageArray.length === 0) pageArray.push([]);
+      return pageArray;
+    }, [photos, layoutInfo.photosPerPage]);
+
+    useEffect(() => {
+        const updateWidth = () => {
+            const el = document.querySelector('.print-page');
+            if (el) setPageWidthPx(el.offsetWidth);
+        };
+        const timer = setTimeout(updateWidth, 100);
+        window.addEventListener('resize', updateWidth);
+        return () => {
+            clearTimeout(timer);
+            window.removeEventListener('resize', updateWidth);
+        };
+    }, [layoutInfo, paper, pages]);
+
+    const handleFileUpload = (e) => {
+      const files = Array.from(e.target.files);
+      if (!files.length) return;
+
+      const newPhotos = files.map((file) => ({
+        id: Math.random().toString(36).substring(2, 9),
+        url: URL.createObjectURL(file),
+        name: file.name,
+        position: { x: 50, y: 50 },
+        scale: 100, 
+        text1: defaultText1, 
+        text2: defaultText2,
+      }));
+
+      setPhotos((prev) => [...prev, ...newPhotos]);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    };
+
+    const editPhotoDisplay = (id, action) => {
+      setPhotos((prevPhotos) =>
+        prevPhotos.map((photo) => {
+          if (photo.id === id) {
+            let { x, y } = photo.position;
+            let scale = photo.scale || 100;
+            switch (action) {
+              case 'up': y = Math.max(0, y - MOVE_STEP); break;
+              case 'down': y = Math.min(100, y + MOVE_STEP); break;
+              case 'left': x = Math.max(0, x - MOVE_STEP); break;
+              case 'right': x = Math.min(100, x + MOVE_STEP); break;
+              case 'zoom-in': scale = Math.min(300, scale + ZOOM_STEP); break;
+              case 'zoom-out': scale = Math.max(20, scale - ZOOM_STEP); break;
+              default: break;
+            }
+            return { ...photo, position: { x, y }, scale };
+          }
+          return photo;
+        })
+      );
+    };
+
+    const rotatePhoto = (id) => {
+      const photoToRotate = photos.find(p => p.id === id);
+      if (!photoToRotate) return;
+
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        canvas.width = img.height;
+        canvas.height = img.width;
+        const ctx = canvas.getContext('2d');
+        
+        ctx.translate(canvas.width / 2, canvas.height / 2);
+        ctx.rotate(90 * Math.PI / 180); 
+        ctx.drawImage(img, -img.width / 2, -img.height / 2);
+
+        canvas.toBlob((blob) => {
+          if (blob) {
+            const newUrl = URL.createObjectURL(blob);
+            setPhotos((prev) =>
+              prev.map((p) => (p.id === id ? { ...p, url: newUrl } : p))
+            );
+          }
+        }, 'image/jpeg', 1.0);
+      };
+      img.src = photoToRotate.url;
+    };
+
+    const removePhoto = (idToRemove) => {
+      setPhotos((prev) => prev.filter((photo) => photo.id !== idToRemove));
+    };
+
+    const clearAllPhotos = () => {
+      setShowConfirmModal(true);
+    };
+
+    const executeClearAll = () => {
+      setPhotos([]);
+      setShowConfirmModal(false);
+    };
+
+    const applyDefaultTextToAll = () => {
+      setPhotos(prev => prev.map(p => ({ ...p, text1: defaultText1, text2: defaultText2 })));
+    };
+
+    const savePhotoText = () => {
+      if (editingPhoto) {
+        setPhotos(prev => prev.map(p => p.id === editingPhoto.id ? editingPhoto : p));
+        setEditingPhoto(null);
+      }
+    };
+
+    const executeExport = async () => {
+      setShowModal(false);
+      setIsExporting(true);
+
+      try {
+        const pagesElements = document.querySelectorAll('.print-page');
+        const { jsPDF } = window.jspdf;
+        
+        const pdf = new jsPDF({
+          orientation: paper.width > paper.height ? 'l' : 'p',
+          unit: 'mm',
+          format: [paper.width, paper.height]
+        });
+
+        // Terapkan Kualitas Ekspor (12 pxPerMm = kualitas standar 100%)
+        const pxPerMm = 12 * (exportQuality / 100); 
+
+        for (let i = 0; i < pagesElements.length; i++) {
+          const pageEl = pagesElements[i];
+          const pageId = pageEl.id;
+          
+          const canvas = await html2canvas(pageEl, {
+            scale: 1, 
+            useCORS: true, 
+            logging: false,
+            backgroundColor: '#ffffff',
+            allowTaint: true,
+            onclone: (clonedDoc) => {
+              const clonedPage = clonedDoc.getElementById(pageId);
+              if (clonedPage) {
+                clonedPage.style.boxShadow = 'none';
+                clonedPage.style.border = 'none';
+                clonedPage.style.margin = '0';
+                clonedPage.style.borderRadius = '0';
+                clonedPage.style.aspectRatio = 'auto'; 
+                
+                clonedPage.style.width = `${paper.width * pxPerMm}px`;
+                clonedPage.style.height = `${paper.height * pxPerMm}px`;
+                clonedPage.style.maxWidth = 'none'; 
+                
+                // Menghitung ukuran font mutlak saat diekspor
+                const exportGridWidthPx = (paper.width * pxPerMm) * (layoutInfo.gridWidthPercent / 100);
+                const photoWidthPx = exportGridWidthPx / layoutInfo.cols;
+                const newFontSize = (textSize / 100) * photoWidthPx; 
+
+                const textGroups = clonedPage.querySelectorAll('.text-group-export');
+                
+                textGroups.forEach(group => {
+                   const line1 = group.querySelector('.text-line-1');
+                   const line2 = group.querySelector('.text-line-2');
+                   
+                   if (line1) {
+                      line1.style.fontSize = `${newFontSize}px`;
+                   }
+                   if (line2) {
+                      line2.style.fontSize = `${newFontSize * 0.65}px`;
+                      // Perhitungan EM murni untuk margin: margin menyesuaikan dirinya secara proporsional.
+                      // Tidak perlu diinject JS lagi.
+                   }
+                });
+              }
+            }
+          });
+
+          if (exportFormat === 'pdf') {
+            const imgData = canvas.toDataURL('image/jpeg', 0.95);
+            if (i > 0) pdf.addPage([paper.width, paper.height]);
+            pdf.addImage(imgData, 'JPEG', 0, 0, paper.width, paper.height);
+          } else if (exportFormat === 'png') {
+            const link = document.createElement('a');
+            const fileNameSuffix = pagesElements.length > 1 ? `_Hal_${i + 1}` : '';
+            link.download = `${exportName}${fileNameSuffix}.png`;
+            
+            await new Promise((resolve) => {
+              canvas.toBlob((blob) => {
+                if (blob) {
+                  const url = URL.createObjectURL(blob);
+                  link.href = url;
+                  link.click();
+                  URL.revokeObjectURL(url);
+                }
+                resolve();
+              }, 'image/png', 1.0);
+            });
+          }
+        }
+
+        if (exportFormat === 'pdf') {
+          pdf.save(`${exportName}.pdf`);
+        }
+      } catch (error) {
+        console.error("Error Export:", error);
+        alert("Terjadi kesalahan saat memproses file. Pastikan tidak menggunakan ad-blocker.");
+      } finally {
+        setIsExporting(false);
+      }
+    };
+
+    // Fungsi helper untuk menghitung ukuran font di layar (pratinjau)
+    const getPreviewFontSize = (scale = 1) => {
+       const previewGridWidth = pageWidthPx * (layoutInfo.gridWidthPercent / 100);
+       const previewCellWidth = previewGridWidth / layoutInfo.cols;
+       const baseFontSize = (textSize / 100) * previewCellWidth;
+       return `${baseFontSize * scale}px`;
+    }
+
+    return (
+      <div className="min-h-screen md:h-screen w-full bg-gradient-to-br from-indigo-100 via-purple-100 to-pink-100 text-slate-800 font-sans flex flex-col md:flex-row relative md:overflow-hidden overflow-x-hidden">
+        
+        {/* CSS DINAMIS UNTUK MEMAKSA ORIENTASI DAN UKURAN KERTAS SAAT CETAK / PRINT */}
+        <style>{`
+          @media print {
+            @page {
+              size: ${paper.width}mm ${paper.height}mm;
+              margin: 0mm;
+            }
+            .print-page {
+              width: ${paper.width}mm !important;
+              height: ${paper.height}mm !important;
+              max-width: none !important;
+              max-height: none !important;
+            }
+          }
+        `}</style>
+
+        {/* MODAL EDIT TEKS PER FOTO */}
+        {editingPhoto && (
+          <div className="fixed inset-0 bg-indigo-900/60 z-[70] flex items-center justify-center p-4 backdrop-blur-sm animate-in fade-in duration-200">
+            <div className="bg-white rounded-3xl w-full max-w-sm shadow-[0_10px_0_0_rgba(79,70,229,0.3)] border-4 border-indigo-100 overflow-hidden">
+              <div className="flex justify-between items-center p-4 border-b-2 border-slate-100 bg-indigo-50">
+                <h3 className="font-bold text-lg text-indigo-900 flex items-center gap-2">
+                  <Type className="w-5 h-5 text-indigo-600" /> Kustom Teks Foto
+                </h3>
+                <button onClick={() => setEditingPhoto(null)} className="text-indigo-400 hover:text-pink-500 hover:bg-pink-100 p-1 rounded-lg transition-colors"><X className="w-5 h-5" /></button>
+              </div>
+              <div className="p-5 space-y-4">
+                <div>
+                  <label className="text-xs font-bold text-slate-500 mb-1 block">Baris 1 (Judul Utama)</label>
+                  <input type="text" value={editingPhoto.text1} onChange={e => setEditingPhoto({...editingPhoto, text1: e.target.value})} className="w-full p-3 rounded-xl border-2 border-slate-200 outline-none focus:border-indigo-400 font-semibold text-slate-700 bg-slate-50" placeholder="Misal: Kenangan Indah" />
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-slate-500 mb-1 block">Baris 2 (Sub Judul / Tanggal)</label>
+                  <input type="text" value={editingPhoto.text2} onChange={e => setEditingPhoto({...editingPhoto, text2: e.target.value})} className="w-full p-3 rounded-xl border-2 border-slate-200 outline-none focus:border-indigo-400 font-semibold text-slate-700 bg-slate-50" placeholder="Misal: Juni 2026" />
+                </div>
+                <button onClick={savePhotoText} className="w-full mt-2 py-3 rounded-xl bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white font-bold flex justify-center items-center gap-2 shadow-[0_4px_0_0_rgba(67,56,202,1)] active:shadow-none active:translate-y-1 transition-all">
+                  <Check className="w-5 h-5" /> Simpan Teks
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Modal Export (Update dengan Kualitas Resolusi) */}
+        {showModal && (
+          <div className="fixed inset-0 bg-indigo-900/40 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
+            <div className="bg-white rounded-3xl w-full max-w-md shadow-[0_10px_0_0_rgba(79,70,229,0.3)] border-4 border-indigo-100 overflow-hidden animate-in fade-in zoom-in duration-200">
+              <div className="flex justify-between items-center p-5 border-b-2 border-slate-100 bg-indigo-50">
+                <h3 className="font-bold text-lg text-indigo-900 flex items-center gap-2">
+                  <Download className="w-5 h-5 text-indigo-600" /> Simpan / Ekspor
+                </h3>
+                <button onClick={() => setShowModal(false)} className="text-indigo-400 hover:text-pink-500 hover:bg-pink-100 p-1 rounded-lg transition-colors">
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+              <div className="p-6 space-y-5">
+                <div className="space-y-2">
+                  <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Nama File</label>
+                  <input 
+                    type="text" 
+                    value={exportName}
+                    onChange={(e) => setExportName(e.target.value)}
+                    className="w-full bg-slate-50 border-2 border-slate-200 rounded-xl px-4 py-3 outline-none focus:border-indigo-500 focus:bg-white focus:shadow-[0_4px_0_0_rgba(99,102,241,0.2)] transition-all font-bold text-slate-700"
+                    placeholder="Contoh: Foto_Liburan"
+                  />
+                </div>
+                
+                <div className="space-y-2">
+                  <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Format File</label>
+                  <div className="grid grid-cols-2 gap-3">
+                    <button 
+                      onClick={() => setExportFormat('pdf')}
+                      className={`py-3 rounded-xl border-2 font-bold flex items-center justify-center gap-2 transition-all ${
+                        exportFormat === 'pdf' 
+                          ? 'border-indigo-500 bg-indigo-100 text-indigo-700 shadow-[0_4px_0_0_rgba(99,102,241,1)] translate-y-[-2px]' 
+                          : 'border-slate-200 text-slate-500 hover:bg-slate-50 shadow-[0_4px_0_0_rgba(226,232,240,1)]'
+                      }`}
+                    >
+                      <FileText className="w-5 h-5" /> PDF
+                    </button>
+                    <button 
+                      onClick={() => setExportFormat('png')}
+                      className={`py-3 rounded-xl border-2 font-bold flex items-center justify-center gap-2 transition-all ${
+                        exportFormat === 'png' 
+                          ? 'border-pink-500 bg-pink-100 text-pink-700 shadow-[0_4px_0_0_rgba(236,72,153,1)] translate-y-[-2px]' 
+                          : 'border-slate-200 text-slate-500 hover:bg-slate-50 shadow-[0_4px_0_0_rgba(226,232,240,1)]'
+                      }`}
+                    >
+                      <ImageIcon className="w-5 h-5" /> PNG
+                    </button>
+                  </div>
+                  {exportFormat === 'png' && pages.length > 1 && (
+                    <p className="text-[11px] font-semibold text-orange-500 mt-2 bg-orange-50 p-2 rounded-lg border border-orange-100">
+                      *Anda memiliki {pages.length} halaman, format PNG akan diunduh terpisah per halaman.
+                    </p>
+                  )}
+                </div>
+
+                {/* PILIHAN KUALITAS RESOLUSI */}
+                <div className="space-y-2 pt-2 border-t border-slate-100">
+                  <label className="text-xs font-bold text-slate-500 uppercase tracking-wider text-cyan-600">Kualitas Ekspor (Resolusi)</label>
+                  <div className="grid grid-cols-5 gap-1.5 sm:gap-2">
+                    {[50, 75, 100, 125, 150].map((q) => (
+                      <button
+                        key={q}
+                        onClick={() => setExportQuality(q)}
+                        className={`py-2 rounded-lg text-xs font-bold transition-all border-2 ${
+                          exportQuality === q
+                            ? 'bg-cyan-500 border-cyan-500 text-white shadow-[0_3px_0_0_rgba(6,182,212,1)] translate-y-[-1px]'
+                            : 'bg-white border-slate-200 text-slate-500 hover:bg-slate-50 shadow-[0_3px_0_0_rgba(226,232,240,1)]'
+                        }`}
+                      >
+                        {q}%
+                      </button>
+                    ))}
+                  </div>
+                  <p className="text-[10px] font-medium text-slate-400 mt-1.5 leading-tight">
+                    Makin besar persennya, gambar makin jernih untuk cetak besar. (Ukuran file bisa ikut membesar)
+                  </p>
+                </div>
+              </div>
+
+              <div className="p-5 border-t-2 border-slate-100 bg-slate-50 flex gap-3 justify-end">
+                <button onClick={() => setShowModal(false)} className="px-5 py-2.5 rounded-xl text-slate-600 font-bold hover:bg-slate-200 transition-colors">Batal</button>
+                <button onClick={executeExport} className="px-6 py-2.5 rounded-xl bg-gradient-to-r from-pink-500 to-rose-600 hover:from-pink-600 hover:to-rose-700 text-white font-bold flex items-center gap-2 transition-all shadow-[0_4px_0_0_rgba(225,29,72,1)] active:shadow-none active:translate-y-1">
+                  <Download className="w-4 h-4" /> Mulai Unduh HD
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Loading Overlay */}
+        {isExporting && (
+          <div className="fixed inset-0 bg-indigo-900/80 z-[60] flex flex-col items-center justify-center text-white backdrop-blur-sm">
+            <Loader2 className="w-16 h-16 animate-spin text-pink-400 mb-6 drop-shadow-[0_0_15px_rgba(236,72,153,0.5)]" />
+            <h2 className="text-3xl font-black tracking-tight drop-shadow-md">Sedang Memproses...</h2>
+            <p className="text-indigo-200 font-medium mt-3 text-center max-w-xs">Mengekstrak gambar resolusi {exportQuality}%, mohon tunggu sebentar 🚀</p>
+          </div>
+        )}
+
+        {/* Modal Konfirmasi Hapus */}
+        {showConfirmModal && (
+          <div className="fixed inset-0 bg-indigo-900/60 z-[80] flex items-center justify-center p-4 backdrop-blur-sm animate-in fade-in duration-200">
+             <div className="bg-white rounded-3xl p-6 w-full max-w-sm shadow-[0_10px_0_0_rgba(79,70,229,0.3)] border-4 border-indigo-100 text-center">
+                <div className="flex justify-center mb-4">
+                   <div className="bg-red-100 p-3 rounded-full">
+                      <Trash2 className="w-8 h-8 text-red-500" />
+                   </div>
+                </div>
+                <h3 className="text-xl font-bold text-indigo-900 mb-2">Hapus Semua Foto?</h3>
+                <p className="text-sm font-medium text-slate-500 mb-6">Yakin ingin mengosongkan semua foto dari kertas? Tindakan ini tidak dapat dibatalkan.</p>
+                <div className="flex justify-center gap-3">
+                  <button onClick={() => setShowConfirmModal(false)} className="px-5 py-3 rounded-xl bg-slate-100 text-slate-600 font-bold hover:bg-slate-200 transition-colors flex-1">Batal</button>
+                  <button onClick={executeClearAll} className="px-5 py-3 rounded-xl bg-red-500 hover:bg-red-600 text-white font-bold transition-all shadow-[0_4px_0_0_rgba(153,27,27,1)] active:shadow-none active:translate-y-[4px] flex-1">Ya, Hapus</button>
+                </div>
+             </div>
+          </div>
+        )}
+
+        {/* Sidebar Kontrol */}
+        <div className="no-print w-full md:w-[360px] md:flex-shrink-0 bg-white/90 backdrop-blur-md md:m-4 md:rounded-3xl border-0 md:border-4 md:border-white shadow-[0_8px_30px_rgb(0,0,0,0.04)] md:shadow-[8px_8px_0_0_rgba(167,139,250,0.3)] flex flex-col z-10 md:h-[calc(100vh-32px)] overflow-hidden">
+          
+          {/* Header */}
+          <div className="p-6 pb-8 border-b-2 border-purple-100 bg-gradient-to-r from-purple-50 to-pink-50 md:rounded-t-3xl relative flex-shrink-0">
+            <div className="absolute top-2 right-2 p-2 opacity-20 pointer-events-none">
+              <Sparkles className="w-12 h-12 text-purple-600" />
+            </div>
+            
+            <div className="flex justify-between items-start relative z-10">
+              <div className="flex flex-col gap-3">
+                <div className="flex items-center gap-3">
+                  <div className="bg-gradient-to-br from-pink-500 to-purple-600 w-16 h-16 rounded-2xl shadow-[0_4px_0_0_rgba(147,51,234,1)] flex items-center justify-center overflow-hidden flex-shrink-0">
+                    <img 
+                      src="https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEi8S6Bd6T33OTSnGsJnz-TERINbkld4mnfzjPfvMDgPGXl8amXLnS3plnpSLAiSRXnKGekXBsUtz2FbuY294sjI-KMMIVFa7FgmKr8xVPEDk2U2t_rvnxOw2j9dbgLlaIQ0ranYgzMCC1y5eu5X4WR-YKo2p3wN5Z-QxH5ryAzUpbxkMcYUaLHCzNJnoCY/s1600/WhatsApp%20Image%202026-05-31%20at%2020.09.48%20%281%29.jpeg" 
+                      alt="Logo paksehPOLAROID" 
+                      className="w-full h-full object-cover" 
+                    />
+                  </div>
+                  <h1 className="text-[22px] leading-none font-black text-transparent bg-clip-text bg-gradient-to-r from-purple-700 to-pink-600 drop-shadow-sm tracking-tight break-words">
+                    pakseh<br/>POLAROID
+                  </h1>
+                </div>
+                <p className="text-xs font-semibold text-purple-600/70">Cetak sesuka hati tanpa turun kualitas!</p>
+              </div>
+
+              {/* TOMBOL BERALIH FITUR YANG TELAH DIPERBAIKI (Flex-shrink-0) */}
+              <a 
+                href="https://pakseh-app.github.io/pasfoto/"
+                className="flex flex-col items-center justify-center w-16 h-16 flex-shrink-0 bg-indigo-50/80 backdrop-blur-sm border-2 border-indigo-200 rounded-2xl shadow-[0_4px_0_0_rgba(199,210,254,1)] hover:shadow-[0_0px_0_0_rgba(199,210,254,1)] hover:translate-y-[4px] hover:bg-white transition-all group cursor-pointer"
+                style={{ textDecoration: 'none' }}
+                title="Beralih ke Fitur Pas-Foto"
+              >
+                <img 
+                  src="https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEgYVd7b1NKm2ZYmiH9ruGq5ZzzvjzRXjMWwrsbtShbhfRha2hv1MAx_WV1a_pVB5bQ6Odo6rc5Ommc9AlAxt4W1vxXRi7m5JTUakg57Q9YHo_Z6ZYS6_ybMiLF2-FG8EJhOZubrDmtGthC37wqbaFGhmqCBQ04_zh4zRmU-C62P37kdXponM0nT3tX-Q30/s360/pngtree-3d-arrow-symbol-transparent-background-png-image_6538913.png" 
+                  alt="Switch Icon" 
+                  className="w-7 h-7 object-contain group-hover:-rotate-180 transition-transform duration-700 ease-in-out" 
+                />
+                <span className="text-[8px] mt-1 font-black text-indigo-500 uppercase tracking-widest text-center leading-none">PAS-FOTO</span>
+              </a>
+            </div>
+            
+          </div>
+
+          {/* AREA SCROLL KONTROL KIRI (Tools & Footer ada di dalam sini) */}
+          <div className="flex-1 overflow-y-auto flex flex-col [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:bg-purple-200 hover:[&::-webkit-scrollbar-thumb]:bg-purple-300 [&::-webkit-scrollbar-thumb]:rounded-full relative">
+            
+            {/* Kontrol Konten */}
+            <div className="p-6 flex flex-col gap-7 flex-shrink-0">
+              
+              {/* Tombol Upload Dipindah Ke Atas Sesuai Permintaan */}
+              <div className="space-y-4">
+                <input
+                  type="file"
+                  multiple
+                  accept="image/*"
+                  className="hidden"
+                  ref={fileInputRef}
+                  onChange={handleFileUpload}
+                />
+                <button
+                  onClick={() => fileInputRef.current?.click()}
+                  className="w-full flex items-center justify-center gap-2 bg-gradient-to-b from-pink-400 to-rose-500 hover:from-pink-500 hover:to-rose-600 text-white py-4 rounded-xl font-black transition-all shadow-[0_6px_0_0_rgba(159,18,57,1)] active:shadow-none active:translate-y-[6px]"
+                >
+                  <Upload className="w-5 h-5 drop-shadow-md" />
+                  <span className="drop-shadow-md text-lg">Pilih Foto Galeri</span>
+                </button>
+              </div>
+
+              {/* Kertas */}
+              <div className="space-y-3">
+                <label className="flex items-center gap-2 text-sm font-bold text-slate-700 uppercase tracking-wider">
+                  <FileText className="w-4 h-4 text-purple-500" /> Kertas (Latar)
+                </label>
+                <div className="grid grid-cols-3 gap-3">
+                  {Object.values(PAPER_SIZES).map((p) => (
+                    <button
+                      key={p.id}
+                      onClick={() => setPaper(p)}
+                      className={`py-2 px-2 rounded-xl text-xs font-bold transition-all ${
+                        paper.id === p.id
+                          ? 'bg-purple-100 border-2 border-purple-500 text-purple-700 shadow-[0_4px_0_0_rgba(168,85,247,1)] translate-y-[-2px]'
+                          : 'bg-white border-2 border-slate-200 text-slate-500 hover:bg-slate-50 shadow-[0_4px_0_0_rgba(226,232,240,1)] active:shadow-none active:translate-y-[2px]'
+                      }`}
+                    >
+                      {p.name}
+                    </button>
+                  ))}
+                </div>
+                {paper.id === 'custom' && (
+                  <div className="flex items-center justify-between gap-4 mt-2 bg-purple-50 p-4 rounded-2xl border-2 border-purple-200 animate-in fade-in slide-in-from-top-2 duration-200">
+                    <div className="flex flex-col gap-2 w-full">
+                      <span className="text-[10px] font-black text-purple-600 uppercase tracking-widest text-center">Lebar (mm)</span>
+                      <NumberStepper value={paper.width} onChange={(val) => setPaper({...paper, width: val})} min={50} max={2000} />
+                    </div>
+                    <span className="font-black text-purple-300 mt-6 text-xl">X</span>
+                    <div className="flex flex-col gap-2 w-full">
+                      <span className="text-[10px] font-black text-purple-600 uppercase tracking-widest text-center">Tinggi (mm)</span>
+                      <NumberStepper value={paper.height} onChange={(val) => setPaper({...paper, height: val})} min={50} max={2000} />
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Ukuran Foto */}
+              <div className="bg-pink-50/50 p-4 rounded-2xl border-2 border-pink-100 space-y-4">
+                <label className="flex items-center gap-2 text-sm font-bold text-slate-700 uppercase tracking-wider">
+                  <Scaling className="w-4 h-4 text-pink-500" /> Dimensi per Foto (mm)
+                </label>
+                
+                <div className="flex items-center justify-between gap-4">
+                  <div className="flex flex-col gap-2 w-full">
+                    <span className="text-[10px] font-bold text-slate-500 uppercase text-center tracking-widest">Lebar (Width)</span>
+                    <NumberStepper value={photoWidth} onChange={setPhotoWidth} min={10} max={500} />
+                  </div>
+                  <span className="font-black text-slate-300 mt-6 text-xl">X</span>
+                  <div className="flex flex-col gap-2 w-full">
+                    <span className="text-[10px] font-bold text-slate-500 uppercase text-center tracking-widest">Tinggi (Height)</span>
+                    <NumberStepper value={photoHeight} onChange={setPhotoHeight} min={10} max={500} />
+                  </div>
+                </div>
+
+                <div className="bg-pink-100/50 p-2 rounded-lg text-center mt-2">
+                  <p className="text-xs font-semibold text-pink-700">
+                    Auto-Fit: Kertas terisi max <span className="font-black text-pink-600">{layoutInfo.photosPerPage} foto</span> ({layoutInfo.cols}x{layoutInfo.rows})
+                  </p>
+                </div>
+              </div>
+
+              {/* TEMA WARNA BINGKAI & TEKS */}
+              <div className="bg-emerald-50/50 p-4 rounded-2xl border-2 border-emerald-100 space-y-4">
+                <label className="flex items-center gap-2 text-sm font-bold text-slate-700 uppercase tracking-wider">
+                  <Palette className="w-4 h-4 text-emerald-500" /> Warna Tema
+                </label>
+                
+                <div className="flex justify-between items-center bg-white p-2.5 rounded-xl border border-emerald-100 shadow-sm">
+                  <span className="text-xs font-bold text-slate-600 pl-1">Warna Bingkai</span>
+                  <div className="relative w-8 h-8 rounded-lg overflow-hidden border border-slate-300 shadow-inner flex-shrink-0 cursor-pointer">
+                    <input 
+                       type="color" 
+                       value={frameColor} 
+                       onChange={(e) => setFrameColor(e.target.value)} 
+                       className="absolute -top-2 -left-2 w-12 h-12 cursor-pointer p-0 m-0 border-0" 
+                       title="Pilih warna bingkai" 
+                    />
+                  </div>
+                </div>
+
+                <div className="flex justify-between items-center bg-white p-2.5 rounded-xl border border-emerald-100 shadow-sm">
+                  <span className="text-xs font-bold text-slate-600 pl-1">Warna Teks</span>
+                  <div className="relative w-8 h-8 rounded-lg overflow-hidden border border-slate-300 shadow-inner flex-shrink-0 cursor-pointer">
+                    <input 
+                       type="color" 
+                       value={textColor} 
+                       onChange={(e) => setTextColor(e.target.value)} 
+                       className="absolute -top-2 -left-2 w-12 h-12 cursor-pointer p-0 m-0 border-0" 
+                       title="Pilih warna teks" 
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* AREA TEKS & BINGKAI */}
+              <div className="bg-indigo-50/50 p-4 rounded-2xl border-2 border-indigo-100 space-y-4">
+                <label className="flex items-center gap-2 text-sm font-bold text-slate-700 uppercase tracking-wider">
+                  <Type className="w-4 h-4 text-indigo-500" /> Area Teks & Bingkai
+                </label>
+                
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between gap-3 bg-white p-2 rounded-xl border border-indigo-50 shadow-sm">
+                    <span className="text-xs font-bold text-slate-600 pl-1">Tinggi Bingkai Bawah (%)</span>
+                    <div className="w-32"><NumberStepper value={bottomPadding} onChange={setBottomPadding} min={5} max={60} /></div>
+                  </div>
+                  
+                  <div className="flex items-center justify-between gap-3 bg-white p-2 rounded-xl border border-indigo-50 shadow-sm">
+                    <span className="text-xs font-bold text-slate-600 pl-1">Ukuran Teks</span>
+                    <div className="w-32"><NumberStepper value={textSize} onChange={setTextSize} min={5} max={100} /></div>
+                  </div>
+
+                  <div className="flex items-center justify-between gap-3 bg-white p-2 rounded-xl border border-indigo-50 shadow-sm">
+                    <span className="text-xs font-bold text-slate-600 pl-1">Posisi Vertikal Teks</span>
+                    <div className="w-32"><NumberStepper value={textOffset} onChange={setTextOffset} min={-100} max={100} /></div>
+                  </div>
+                  
+                  {/* SLIDER OPASITAS & JARAK TEKS */}
+                  <div className="pt-2 pb-1 space-y-4 border-t border-indigo-100/50">
+                    <div className="space-y-1">
+                       <div className="flex justify-between items-center px-1">
+                          <label className="text-[10px] font-black text-indigo-400 uppercase tracking-widest">Ketebalan Teks (Opasitas)</label>
+                          <span className="text-xs font-bold text-slate-500">{textOpacity}%</span>
+                       </div>
+                       <input 
+                         type="range" min="10" max="100" value={textOpacity} 
+                         onChange={(e) => setTextOpacity(e.target.value)}
+                         className="w-full h-1.5 bg-indigo-100 rounded-lg appearance-none cursor-pointer accent-indigo-500 hover:accent-pink-500 transition-all"
+                       />
+                    </div>
+                    
+                    <div className="space-y-1">
+                       <div className="flex justify-between items-center px-1">
+                          <label className="text-[10px] font-black text-indigo-400 uppercase tracking-widest">Jarak Baris 1 & 2</label>
+                          <span className="text-xs font-bold text-slate-500">{textSpacing}</span>
+                       </div>
+                       <input 
+                         type="range" min="-20" max="100" value={textSpacing} 
+                         onChange={(e) => setTextSpacing(e.target.value)}
+                         className="w-full h-1.5 bg-indigo-100 rounded-lg appearance-none cursor-pointer accent-indigo-500 hover:accent-pink-500 transition-all"
+                       />
+                    </div>
+                  </div>
+                  
+                  <div className="space-y-2 pt-3 border-t border-indigo-100/50 relative">
+                    <span className="text-[10px] font-black text-indigo-400 uppercase tracking-widest block mb-1">Default Teks (Untuk foto baru)</span>
+                    <input type="text" value={defaultText1} onChange={e => setDefaultText1(e.target.value)} placeholder="Baris 1 (Misal: Kenangan)" className="w-full text-sm p-3 rounded-xl border-2 border-slate-200 outline-none focus:border-indigo-400 font-semibold text-slate-700 transition-all bg-white" />
+                    <input type="text" value={defaultText2} onChange={e => setDefaultText2(e.target.value)} placeholder="Baris 2 (Misal: Juni 2026)" className="w-full text-sm p-3 rounded-xl border-2 border-slate-200 outline-none focus:border-indigo-400 font-semibold text-slate-700 transition-all bg-white" />
+                    
+                    {photos.length > 0 && (
+                       <button onClick={applyDefaultTextToAll} className="w-full py-2 bg-indigo-100 hover:bg-indigo-200 text-indigo-700 text-xs font-bold rounded-lg transition-colors border border-indigo-200 mt-1">
+                          Terapkan Teks Ini ke Semua Foto
+                       </button>
+                    )}
+                  </div>
+                  
+                  <div className="grid grid-cols-4 gap-2 pt-2 border-t border-indigo-100/50">
+                    <button onClick={() => setSelectedFont('font-caveat')} className={`py-2 rounded-lg border-2 transition-all ${selectedFont === 'font-caveat' ? 'border-indigo-500 bg-indigo-100 text-indigo-700 shadow-[0_2px_0_0_rgba(99,102,241,1)] translate-y-[-1px]' : 'border-slate-200 text-slate-500 hover:bg-slate-50'} font-caveat text-xl leading-none`}>Estetik</button>
+                    <button onClick={() => setSelectedFont('font-indie')} className={`py-2 rounded-lg border-2 transition-all ${selectedFont === 'font-indie' ? 'border-indigo-500 bg-indigo-100 text-indigo-700 shadow-[0_2px_0_0_rgba(99,102,241,1)] translate-y-[-1px]' : 'border-slate-200 text-slate-500 hover:bg-slate-50'} font-indie text-xl leading-none`}>Indie</button>
+                    <button onClick={() => setSelectedFont('font-kalam')} className={`py-2 rounded-lg border-2 transition-all ${selectedFont === 'font-kalam' ? 'border-indigo-500 bg-indigo-100 text-indigo-700 shadow-[0_2px_0_0_rgba(99,102,241,1)] translate-y-[-1px]' : 'border-slate-200 text-slate-500 hover:bg-slate-50'} font-kalam text-lg leading-none`}>Kalam</button>
+                    <button onClick={() => setSelectedFont('font-marker')} className={`py-2 rounded-lg border-2 transition-all ${selectedFont === 'font-marker' ? 'border-indigo-500 bg-indigo-100 text-indigo-700 shadow-[0_2px_0_0_rgba(99,102,241,1)] translate-y-[-1px]' : 'border-slate-200 text-slate-500 hover:bg-slate-50'} font-marker text-[11px] leading-none`}>Marker</button>
+                  </div>
+                </div>
+              </div>
+
+              <div className="h-px bg-gradient-to-r from-transparent via-slate-200 to-transparent"></div>
+
+            </div>
+
+            {/* EKSPOR & FOOTER */}
+            <div className="p-6 border-t-2 border-purple-100 bg-white mt-auto space-y-4 flex-shrink-0 relative z-20">
+              <div className="flex justify-between items-center text-sm font-bold bg-slate-50 p-3 rounded-xl border border-slate-100">
+                <span className="text-slate-500">Foto: <span className="text-purple-600 text-base">{photos.length}</span></span>
+                <span className="text-slate-500">Kertas: <span className="text-pink-600 text-base">{pages.length}</span> lbr</span>
+              </div>
+              
+              <div className="grid grid-cols-2 gap-3 mb-2">
+                <button
+                  onClick={() => window.print()}
+                  disabled={photos.length === 0}
+                  className={`w-full flex items-center justify-center gap-2 text-white py-3 rounded-xl font-black text-sm transition-all disabled:active:translate-y-0 disabled:cursor-not-allowed ${
+                    photos.length > 0 
+                      ? 'bg-gradient-to-b from-emerald-400 to-emerald-600 shadow-[0_5px_0_0_rgba(5,150,105,1)] active:shadow-none active:translate-y-[5px]' 
+                      : 'bg-slate-300 text-slate-500 shadow-[0_5px_0_0_rgba(148,163,184,1)]'
+                  }`}
+                >
+                  <Printer className="w-5 h-5 drop-shadow-md" />
+                  <span className="drop-shadow-md">Cetak (Print)</span>
+                </button>
+                <button
+                  onClick={() => setShowModal(true)}
+                  disabled={photos.length === 0}
+                  className={`w-full flex items-center justify-center gap-2 text-white py-3 rounded-xl font-black text-sm transition-all disabled:active:translate-y-0 disabled:cursor-not-allowed ${
+                    photos.length > 0 
+                      ? 'bg-gradient-to-b from-indigo-500 to-purple-600 shadow-[0_5px_0_0_rgba(67,56,202,1)] active:shadow-none active:translate-y-[5px]' 
+                      : 'bg-slate-300 text-slate-500 shadow-[0_5px_0_0_rgba(148,163,184,1)]'
+                  }`}
+                >
+                  <Download className="w-5 h-5 drop-shadow-md" />
+                  <span className="drop-shadow-md">Simpan File</span>
+                </button>
+              </div>
+              
+              {photos.length > 0 && (
+                  <button
+                    onClick={clearAllPhotos}
+                    className="w-full flex items-center justify-center gap-2 bg-white border-2 border-red-200 text-red-500 hover:bg-red-50 py-3 rounded-xl text-sm font-bold transition-all shadow-[0_4px_0_0_rgba(254,202,202,1)] active:shadow-none active:translate-y-[4px]"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                    Kosongkan Semua
+                  </button>
+                )}
+
+                <div className="pt-2 text-center flex flex-col items-center justify-center">
+                  <span className="text-xs text-slate-400 font-medium font-serif italic mb-2">created by. Pakseh</span>
+                  <div className="flex gap-4">
+                    <a href="https://wa.me/6285156028912" target="_blank" rel="noreferrer" title="WhatsApp Pakseh" 
+                       className="group relative flex items-center justify-center w-8 h-8 rounded-full border-2 border-green-400 shadow-[0_0_15px_rgba(74,222,128,0.5)] bg-green-50 hover:bg-green-100 hover:scale-110 hover:-translate-y-1 transition-all duration-300 cursor-pointer">
+                      <svg className="w-4 h-4 text-green-500 drop-shadow-[0_0_8px_rgba(34,197,94,0.8)]" fill="currentColor" viewBox="0 0 24 24"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z"/></svg>
+                    </a>
+                    <a href="https://www.tiktok.com/@pakseh_10" target="_blank" rel="noreferrer" title="TikTok Pakseh" 
+                       className="group relative flex items-center justify-center w-8 h-8 rounded-full border-2 border-pink-400 shadow-[0_0_15px_rgba(244,114,182,0.5)] bg-pink-50 hover:bg-pink-100 hover:scale-110 hover:-translate-y-1 transition-all duration-300 cursor-pointer">
+                      <svg className="w-4 h-4 text-pink-500 drop-shadow-[0_0_8px_rgba(236,72,153,0.8)]" fill="currentColor" viewBox="0 0 24 24"><path d="M12.525.02c1.31-.02 2.61-.01 3.91-.02.08 1.53.63 3.09 1.75 4.17 1.12 1.11 2.7 1.62 4.24 1.79v4.03c-1.44-.05-2.89-.35-4.2-.97-.57-.26-1.1-.59-1.62-.93-.01 2.92.01 5.84-.02 8.75-.08 1.4-.54 2.79-1.35 3.94-1.31 1.92-3.58 3.17-5.91 3.21-1.43.08-2.86-.31-4.08-1.03-2.02-1.19-3.44-3.37-3.65-5.71-.02-.5-.03-1-.01-1.49.18-1.9 1.12-3.72 2.58-4.96 1.66-1.44 3.98-2.13 6.15-1.72.02 1.48-.04 2.96-.04 4.44-.99-.32-2.15-.23-3.02.37-.63.41-1.11 1.04-1.36 1.75-.21.51-.15 1.07-.14 1.61.24 1.64 1.82 3.02 3.5 2.87 1.12-.01 2.19-.66 2.77-1.61.19-.33.4-.67.41-1.06.1-1.79.06-3.57.07-5.36.01-4.03-.01-8.05.02-12.07z"/></svg>
+                    </a>
+                  </div>
+                </div>
+            </div>
+
+          </div> 
+          {/* AKHIR AREA SCROLL KONTROL KIRI */}
+        </div>
+
+        {/* Area Preview Halaman Kanan */}
+        <div className="print-container flex-1 md:h-screen md:overflow-y-auto p-4 md:p-8 flex flex-col items-center gap-10">
+          
+          {/* Loop Halaman (Kertas) */}
+          {pages.map((pagePhotos, pageIndex) => (
+            <div 
+              key={`page-${pageIndex}`}
+              id={`page-${pageIndex}`}
+              className="print-page bg-white flex items-center justify-center relative mx-auto overflow-hidden transition-all duration-300 flex-shrink-0"
+              style={{
+                aspectRatio: `${paper.width} / ${paper.height}`,
+                width: '100%',
+                maxWidth: `${paper.width * 3.5}px`, 
+                boxShadow: '0 20px 40px -10px rgba(79, 70, 229, 0.2), 0 0 0 1px rgba(0,0,0,0.05)'
+              }}
+            >
+              
+              {/* Grid Layout Container - Di-set mutlak seimbang berdasarkan proporsi mm di kertas sesungguhnya */}
+              <div 
+                className="grid gap-0 relative"
+                style={{
+                  width: `${layoutInfo.gridWidthPercent}%`,
+                  height: `${layoutInfo.gridHeightPercent}%`,
+                  gridTemplateColumns: `repeat(${layoutInfo.cols}, minmax(0, 1fr))`,
+                  gridTemplateRows: `repeat(${layoutInfo.rows}, minmax(0, 1fr))`,
+                }}
+              >
+                {Array.from({ length: layoutInfo.photosPerPage }).map((_, slotIndex) => {
+                  const photo = pagePhotos[slotIndex];
+                  
+                  return (
+                    <div 
+                      key={slotIndex} 
+                      className={`relative group flex flex-col ${photo ? 'border border-slate-300' : 'bg-transparent'}`}
+                      style={{ 
+                        padding: `8% 8% 0 8%`, // Jarak kiri-kanan-atas selalu konstan dengan layout.
+                        backgroundColor: photo ? frameColor : 'transparent' 
+                      }} 
+                    >
+                      {photo ? (
+                        <>
+                          <div className="w-full flex-1 bg-slate-100 relative overflow-hidden group-hover:shadow-[0_0_0_4px_rgba(167,139,250,1)] transition-all z-10">
+                            {/* Rendering menggunakan Background agar proporsional dan tidak gepeng */}
+                            <div 
+                              className="w-full h-full transition-all duration-200"
+                              style={{
+                                backgroundImage: `url(${photo.url})`,
+                                backgroundSize: 'cover',
+                                backgroundPosition: `${photo.position.x}% ${photo.position.y}%`,
+                                backgroundRepeat: 'no-repeat',
+                                transform: `scale(${(photo.scale || 100) / 100})` // PENGATURAN ZOOM
+                              }}
+                            />
+                            
+                            {/* Overlay Kontrol Geser Foto & Zoom */}
+                            <div data-html2canvas-ignore="true" className="no-print absolute inset-0 bg-black/0 group-hover:bg-indigo-900/40 transition-all flex items-center justify-center opacity-0 group-hover:opacity-100 pointer-events-none backdrop-blur-[1px]">
+                              
+                              {/* Kontrol Pan & Zoom di Tengah */}
+                              <div className="flex flex-col items-center gap-1.5 p-2 pointer-events-auto">
+                                <button onClick={() => editPhotoDisplay(photo.id, 'up')} className="p-1.5 md:p-2 bg-white hover:bg-pink-100 text-slate-800 rounded-xl shadow-[0_4px_0_0_rgba(0,0,0,0.2)] active:shadow-none active:translate-y-[4px] transition-all" title="Geser Atas"><ChevronUp className="w-4 h-4 md:w-5 md:h-5 font-bold" /></button>
+                                <div className="flex items-center gap-1.5">
+                                  <button onClick={() => editPhotoDisplay(photo.id, 'left')} className="p-1.5 md:p-2 bg-white hover:bg-pink-100 text-slate-800 rounded-xl shadow-[0_4px_0_0_rgba(0,0,0,0.2)] active:shadow-none active:translate-y-[4px] transition-all" title="Geser Kiri"><ChevronLeft className="w-4 h-4 md:w-5 md:h-5 font-bold" /></button>
+                                  
+                                  {/* Kontrol Zoom (Ditengah pan) */}
+                                  <div className="flex flex-col gap-1.5 mx-1">
+                                    <button onClick={() => editPhotoDisplay(photo.id, 'zoom-in')} className="p-1.5 bg-blue-500 hover:bg-blue-600 text-white rounded-lg shadow-[0_3px_0_0_rgba(29,78,216,1)] active:shadow-none active:translate-y-[3px] transition-all" title="Zoom In"><ZoomIn className="w-4 h-4" /></button>
+                                    <button onClick={() => editPhotoDisplay(photo.id, 'zoom-out')} className="p-1.5 bg-blue-500 hover:bg-blue-600 text-white rounded-lg shadow-[0_3px_0_0_rgba(29,78,216,1)] active:shadow-none active:translate-y-[3px] transition-all" title="Zoom Out"><ZoomOut className="w-4 h-4" /></button>
+                                  </div>
+
+                                  <button onClick={() => editPhotoDisplay(photo.id, 'right')} className="p-1.5 md:p-2 bg-white hover:bg-pink-100 text-slate-800 rounded-xl shadow-[0_4px_0_0_rgba(0,0,0,0.2)] active:shadow-none active:translate-y-[4px] transition-all" title="Geser Kanan"><ChevronRight className="w-4 h-4 md:w-5 md:h-5 font-bold" /></button>
+                                </div>
+                                <button onClick={() => editPhotoDisplay(photo.id, 'down')} className="p-1.5 md:p-2 bg-white hover:bg-pink-100 text-slate-800 rounded-xl shadow-[0_4px_0_0_rgba(0,0,0,0.2)] active:shadow-none active:translate-y-[4px] transition-all" title="Geser Bawah"><ChevronDown className="w-4 h-4 md:w-5 md:h-5 font-bold" /></button>
+                              </div>
+                            </div>
+
+                            {/* Tombol Rotasi Kiri Atas */}
+                            <button data-html2canvas-ignore="true" onClick={() => rotatePhoto(photo.id)} className="no-print absolute top-2 left-2 bg-blue-500 hover:bg-blue-600 text-white p-2 rounded-xl shadow-[0_4px_0_0_rgba(29,78,216,1)] active:shadow-none active:translate-y-[4px] opacity-0 group-hover:opacity-100 transition-all z-20" title="Putar Foto (90 Derajat)"><RotateCw className="w-4 h-4" /></button>
+
+                            {/* Tombol Hapus Kanan Atas */}
+                            <button data-html2canvas-ignore="true" onClick={() => removePhoto(photo.id)} className="no-print absolute top-2 right-2 bg-red-500 hover:bg-red-600 text-white p-2 rounded-xl shadow-[0_4px_0_0_rgba(153,27,27,1)] active:shadow-none active:translate-y-[4px] opacity-0 group-hover:opacity-100 transition-all z-20" title="Hapus foto"><Trash2 className="w-4 h-4" /></button>
+                          </div>
+
+                          {/* AREA TEKS - Kotak pembungkusnya kini punya ukuran proporsional presisi berdasarkan mutlak lebar (aspect ratio aman) */}
+                          <div className="w-full relative" style={{ paddingBottom: `${bottomPadding}%` }}>
+                             <div 
+                                className={`absolute inset-0 flex flex-col items-center justify-center cursor-pointer group/text text-group-export hover:bg-slate-50/20 transition-colors z-20 ${selectedFont}`}
+                                style={{ 
+                                   transform: `translateY(${-textOffset}%)`,
+                                   opacity: textOpacity / 100 
+                                }}
+                                onClick={() => setEditingPhoto(photo)}
+                             >
+                                 {photo.text1 || photo.text2 ? (
+                                     <>
+                                         {photo.text1 && <span className="font-bold text-line-1" style={{ color: textColor, fontSize: getPreviewFontSize(), lineHeight: 1.1 }}>{photo.text1}</span>}
+                                         {/* PENGGUNAAN EM UNTUK JARAK, MEMASTIKAN SKALA SELALU PRESISI: */}
+                                         {photo.text2 && <span className="font-medium text-line-2" style={{ color: textColor, fontSize: getPreviewFontSize(0.65), marginTop: `${textSpacing / 65}em`, lineHeight: 1.1 }}>{photo.text2}</span>}
+                                     </>
+                                 ) : (
+                                     <span data-html2canvas-ignore="true" className="no-print opacity-0 group-hover/text:opacity-100 text-xs font-bold text-indigo-400 bg-indigo-50 px-2 py-1 rounded shadow-sm border border-indigo-100">+ Isi Teks</span>
+                                 )}
+                             </div>
+                          </div>
+                        </>
+                      ) : (
+                        // Slot KOSONG: Putih bersih di ekspor, tapi ada border putus-putus di layar preview
+                        <div className="w-full h-full flex flex-col items-center justify-center relative">
+                          <div data-html2canvas-ignore="true" className="no-print absolute inset-2 border-2 border-dashed border-slate-200 flex items-center justify-center rounded-xl pointer-events-none">
+                            <span className="text-slate-300 text-sm font-black text-center px-2 z-10">KOSONG</span>
+                          </div>
+                        </div>
+                      )}
+                      
+                    </div>
+                  );
+                })}
+              </div>
+              
+              <div data-html2canvas-ignore="true" className="no-print absolute bottom-[-30px] right-0 text-sm font-bold text-slate-400">Halaman {pageIndex + 1}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  const rootElement = document.getElementById('root');
+  if (rootElement && rootElement.parentNode !== document.body) {
+      document.body.appendChild(rootElement);
+  }
+
+  const root = createRoot(rootElement);
+  root.render(<App />);
+</script>
+
+</body>
+</html>
