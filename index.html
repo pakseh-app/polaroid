@@ -4,6 +4,8 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Aplikasi Polaroid V2</title>
+<!-- Preload gambar QRIS agar instan (tanpa delay) saat modal muncul -->
+<link rel="preload" as="image" href="https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEjoE7mUnN6P1eqkxw22cqeTSB4Yjps7yM2b4MLgMlmW_AesTCgXHMVg8d04UgkkIZTiZTzW-Vm8UhWxr5dzBShD-Vht-p1T-UmfJ0OkVchyphenhyphenzMrM1GBQhWJtvdG8k1mTz4wtE10RLKLt4bw3wh8496zxEkDB_PQokb8EgnHFKYpfQ1YgrauoZP-7IA2BV34/s250-rw/QRIS.jpeg" fetchpriority="high">
 <!-- ======================================================= -->
 <!-- SCRIPT DEPENDENSI & IMPORT MAP -->
 <!-- ======================================================= -->
@@ -182,6 +184,10 @@
     const [photos, setPhotos] = useState([]);
     const [paper, setPaper] = useState(PAPER_SIZES.a4);
     
+    // --- STATE POPUP DONASI (KODE TAMBAHAN BARU) ---
+    const [showDonationModal, setShowDonationModal] = useState(true);
+    const [donationCountdown, setDonationCountdown] = useState(10);
+    
     const [photoWidth, setPhotoWidth] = useState(54); 
     const [photoHeight, setPhotoHeight] = useState(86);
 
@@ -210,6 +216,14 @@
     const [exportQuality, setExportQuality] = useState(100); 
     const [isExporting, setIsExporting] = useState(false);
     const [showConfirmModal, setShowConfirmModal] = useState(false);
+
+    // --- EFFECT TIMER DONASI (KODE TAMBAHAN BARU) ---
+    useEffect(() => {
+        if (showDonationModal && donationCountdown > 0) {
+            const timer = setTimeout(() => setDonationCountdown(donationCountdown - 1), 1000);
+            return () => clearTimeout(timer);
+        }
+    }, [donationCountdown, showDonationModal]);
 
     const layoutInfo = useMemo(() => {
       const w = Number(photoWidth) || 1;
@@ -476,6 +490,32 @@
             }
           }
         `}</style>
+
+        {/* ======================================================= */}
+        {/* MULAI KODE TAMBAHAN: POPUP DONASI QRIS (REACT COMPONENT)*/}
+        {/* ======================================================= */}
+        {showDonationModal && (
+          <div className="fixed inset-0 bg-slate-900/80 z-[100] flex items-center justify-center p-4 backdrop-blur-md animate-in fade-in duration-300">
+            <div className="bg-white rounded-[2rem] p-6 w-full max-w-sm shadow-2xl text-center flex flex-col items-center border-4 border-white">
+              <h3 className="text-xl font-black text-slate-800 mb-2">Dukung Aplikasi Ini</h3>
+              <p className="text-sm font-bold text-slate-500 mb-4">Untuk donasi silahkan scan barcode QRIS ini.<br/>Jika tidak berkenan donasi, silahkan skip.</p>
+
+              {/* GAMBAR DIPERKECIL LAGI KE 250px DAN DIUBAH KE FORMAT WEBP (-rw) UNTUK KOMPRESI MAKSIMAL */}
+              <img src="https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEjoE7mUnN6P1eqkxw22cqeTSB4Yjps7yM2b4MLgMlmW_AesTCgXHMVg8d04UgkkIZTiZTzW-Vm8UhWxr5dzBShD-Vht-p1T-UmfJ0OkVchyphenhyphenzMrM1GBQhWJtvdG8k1mTz4wtE10RLKLt4bw3wh8496zxEkDB_PQokb8EgnHFKYpfQ1YgrauoZP-7IA2BV34/s250-rw/QRIS.jpeg" alt="QRIS Donasi" className="w-full max-w-[250px] rounded-xl shadow-md mb-6" fetchpriority="high" />
+
+              <button
+                disabled={donationCountdown > 0}
+                onClick={() => setShowDonationModal(false)}
+                className={`w-full py-4 rounded-2xl font-black text-lg transition-all ${donationCountdown > 0 ? 'bg-slate-200 text-slate-400 cursor-not-allowed' : 'bg-gradient-to-b from-rose-400 to-rose-600 text-white shadow-[0_5px_0_0_#be123c,0_10px_20px_rgba(225,29,72,0.4)] active:shadow-[0_0px_0_0_#be123c] active:translate-y-[5px] hover:brightness-110 cursor-pointer'}`}
+              >
+                {donationCountdown > 0 ? `Skip (${donationCountdown})` : 'Skip'}
+              </button>
+            </div>
+          </div>
+        )}
+        {/* ======================================================= */}
+        {/* AKHIR KODE TAMBAHAN: POPUP DONASI QRIS (REACT COMPONENT)*/}
+        {/* ======================================================= */}
 
         {/* MODAL EDIT TEKS PER FOTO */}
         {editingPhoto && (
