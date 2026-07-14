@@ -112,6 +112,19 @@
   .font-indie { font-family: 'Indie Flower', cursive; }
   .font-kalam { font-family: 'Kalam', cursive; }
   .font-marker { font-family: 'Permanent Marker', cursive; }
+
+  /* KODE TAMBAHAN BARU: ANIMASI TEKS NGECE & LUCU */
+  @keyframes ngece-bounce {
+    0%, 100% { transform: translateY(0) scale(1) rotate(-3deg); }
+    50% { transform: translateY(-15px) scale(1.1) rotate(5deg); color: #ec4899; }
+  }
+  .ngece-text {
+    display: inline-block;
+    animation: ngece-bounce 0.6s cubic-bezier(0.28, 0.84, 0.42, 1) infinite alternate;
+  }
+  .ngece-delay-1 { animation-delay: 0.15s; }
+  .ngece-delay-2 { animation-delay: 0.30s; }
+  .ngece-delay-3 { animation-delay: 0.45s; }
 </style>
 </head>
 <body>
@@ -187,6 +200,7 @@
     // --- STATE POPUP DONASI (KODE TAMBAHAN BARU) ---
     const [showDonationModal, setShowDonationModal] = useState(true);
     const [donationCountdown, setDonationCountdown] = useState(10);
+    const [showTeasingModal, setShowTeasingModal] = useState(false); // State baru untuk popup ngece
     
     const [photoWidth, setPhotoWidth] = useState(54); 
     const [photoHeight, setPhotoHeight] = useState(86);
@@ -498,14 +512,17 @@
           <div className="fixed inset-0 bg-slate-900/80 z-[100] flex items-center justify-center p-4 backdrop-blur-md animate-in fade-in duration-300">
             <div className="bg-white rounded-[2rem] p-6 w-full max-w-sm shadow-2xl text-center flex flex-col items-center border-4 border-white">
               <h3 className="text-xl font-black text-slate-800 mb-2">Dukung Aplikasi Ini</h3>
-              <p className="text-sm font-bold text-slate-500 mb-4">Jika menurutmu aplikasi ini bermanfaat silahkan donasi seiklasnya dengan scan barcode QRIS dibawah ini.<br/>Jika tidak berkenan donasi, silahkan skip.</p>
+              <p className="text-sm font-bold text-slate-500 mb-4">Untuk donasi silahkan scan barcode QRIS ini.<br/>Jika tidak berkenan donasi, silahkan skip.</p>
 
               {/* GAMBAR DIPERKECIL LAGI KE 250px DAN DIUBAH KE FORMAT WEBP (-rw) UNTUK KOMPRESI MAKSIMAL */}
               <img src="https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEjoE7mUnN6P1eqkxw22cqeTSB4Yjps7yM2b4MLgMlmW_AesTCgXHMVg8d04UgkkIZTiZTzW-Vm8UhWxr5dzBShD-Vht-p1T-UmfJ0OkVchyphenhyphenzMrM1GBQhWJtvdG8k1mTz4wtE10RLKLt4bw3wh8496zxEkDB_PQokb8EgnHFKYpfQ1YgrauoZP-7IA2BV34/s250-rw/QRIS.jpeg" alt="QRIS Donasi" className="w-full max-w-[250px] rounded-xl shadow-md mb-6" fetchpriority="high" />
 
               <button
                 disabled={donationCountdown > 0}
-                onClick={() => setShowDonationModal(false)}
+                onClick={() => {
+                   setShowDonationModal(false);
+                   setShowTeasingModal(true); // Membuka popup usil setelah skip diklik
+                }}
                 className={`w-full py-4 rounded-2xl font-black text-lg transition-all ${donationCountdown > 0 ? 'bg-slate-200 text-slate-400 cursor-not-allowed' : 'bg-gradient-to-b from-rose-400 to-rose-600 text-white shadow-[0_5px_0_0_#be123c,0_10px_20px_rgba(225,29,72,0.4)] active:shadow-[0_0px_0_0_#be123c] active:translate-y-[5px] hover:brightness-110 cursor-pointer'}`}
               >
                 {donationCountdown > 0 ? `Skip (${donationCountdown})` : 'Skip'}
@@ -515,6 +532,44 @@
         )}
         {/* ======================================================= */}
         {/* AKHIR KODE TAMBAHAN: POPUP DONASI QRIS (REACT COMPONENT)*/}
+        {/* ======================================================= */}
+
+        {}
+        {/* ======================================================= */}
+        {/* MULAI KODE TAMBAHAN: POPUP KEDUA (USIL / NGECE)         */}
+        {/* ======================================================= */}
+        {showTeasingModal && (
+          <div className="fixed inset-0 bg-slate-900/90 z-[110] flex items-center justify-center p-4 backdrop-blur-xl animate-in zoom-in duration-300">
+            <div className="bg-white rounded-[2.5rem] p-8 w-full max-w-sm shadow-[0_20px_50px_rgba(0,0,0,0.5)] text-center flex flex-col items-center border-[6px] border-pink-400 relative overflow-hidden">
+              
+              {/* Bouncing Text Lucu */}
+              <div className="text-[26px] md:text-3xl font-black mb-6 mt-4 flex flex-wrap justify-center gap-x-2 leading-tight">
+                <span className="ngece-text text-slate-700">Minimal</span>
+                <span className="ngece-text ngece-delay-1 text-slate-700">bilang</span>
+                <span className="ngece-text ngece-delay-2 text-pink-600 drop-shadow-sm">Makasih</span>
+                <span className="ngece-text ngece-delay-3 text-slate-700">lah..</span>
+              </div>
+
+              {/* Emoji Ngece memantul */}
+              <div className="text-6xl mb-8 animate-bounce drop-shadow-lg" style={{animationDuration: '0.8s'}}>
+                🤪😝
+              </div>
+
+              {/* WhatsApp Button (Kirim Pesan Makasih) */}
+              <a href="https://wa.me/6285156028912?text=Makasih%20ya%20Pakseh%20aplikasinya%20keren!%20%F0%9F%99%8F" target="_blank" rel="noreferrer" className="w-full flex items-center justify-center gap-3 bg-gradient-to-b from-green-400 to-green-600 hover:from-green-500 hover:to-green-700 text-white py-4 rounded-2xl font-black text-lg shadow-[0_6px_0_0_#16a34a,0_10px_20px_rgba(34,197,94,0.4)] active:shadow-[0_0px_0_0_#16a34a] active:translate-y-[6px] transition-all mb-6">
+                 <svg className="w-7 h-7 drop-shadow-sm" fill="currentColor" viewBox="0 0 24 24"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z"/></svg>
+                 Chat Pakseh
+              </a>
+
+              {/* Tombol Tutup Untuk Lanjut Aplikasi */}
+              <button onClick={() => setShowTeasingModal(false)} className="text-slate-400 hover:text-pink-500 font-bold text-[11px] underline underline-offset-4 transition-colors cursor-pointer">
+                Iya iya maaf, lanjut ke aplikasi 😔
+              </button>
+            </div>
+          </div>
+        )}
+        {/* ======================================================= */}
+        {/* AKHIR KODE TAMBAHAN: POPUP KEDUA (USIL / NGECE)         */}
         {/* ======================================================= */}
 
         {/* MODAL EDIT TEKS PER FOTO */}
@@ -642,6 +697,7 @@
           </div>
         )}
 
+        {}
         {/* Modal Konfirmasi Hapus */}
         {showConfirmModal && (
           <div className="fixed inset-0 bg-indigo-900/60 z-[80] flex items-center justify-center p-4 backdrop-blur-sm animate-in fade-in duration-200">
@@ -823,6 +879,7 @@
                 </div>
               </div>
 
+              {}
               {/* AREA TEKS & BINGKAI */}
               <div className="bg-indigo-50/50 p-4 rounded-2xl border-2 border-indigo-100 space-y-4">
                 <label className="flex items-center gap-2 text-sm font-bold text-slate-700 uppercase tracking-wider">
@@ -960,6 +1017,7 @@
           {/* AKHIR AREA SCROLL KONTROL KIRI */}
         </div>
 
+        {}
         {/* Area Preview Halaman Kanan */}
         <div className="print-container flex-1 md:h-screen md:overflow-y-auto p-4 md:p-8 flex flex-col items-center gap-10">
           
